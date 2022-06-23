@@ -1,12 +1,305 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<html>
+	<title>blob sign generator</title>
+	<link href="./assets/favicon.ico" rel="shortcut icon" type="image/x-icon">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Portfolio</title>
-</head>
-<body>
-  <p>Hello, World!</p>
-</body>
+    <style>
+        .color-bar {
+          display: none;
+        }
+        .container {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          min-height: 95vh;
+        }
+
+        .drawing-area {
+          border: 1px solid black;
+          margin-top: 20px;
+        }
+        #drawing-area:hover {
+            cursor: crosshair;
+        }
+        .clear-button {
+          font-size: 16px;
+        }
+        .html5colorpicker {
+          margin-top: 5px;
+        }
+        
+    </style>
+    <div>
+    <canvas id="canvas"></canvas><img id="copy" src="">
+    <br>
+    <textarea id="text" onchange="textupdate(this)" placeholder="Text"></textarea>
+    <br>
+    <input type="number" id="textsize" onchange="textsizeupdate(this)" placeholdder="Text size" value=34></input>
+    <br>
+    <input type="file" id="imagefile" onchange="imageupdate(this)"></input>
+    <br>
+    <input id="imageurl" onchange="imageurlupdate(this)" placeholder="Image address"></input>
+	
+    </div>
+
+    <canvas id="drawing-area" class="drawing-area" height="240" width="390"></canvas>
+    <div>
+            <canvas width="390" height="240" id="canvas2" style="display:none;"></canvas>
+            <div class="color-bar"></div>
+        <input type="color" id="html5colorpicker" class="html5colorpicker" onchange="clickColor(0, -1, -1, 5)" value="#000000">
+        <input type="number" id="lineWidth" placeholdder="Line Width" value=5 style="width:50px"></input>
+        <button id="clear-button" class="clear-button" type="button">Clear</button>
+            <button class="clear-button" style="display:none;">clear</button>
+            <button id="apply-button" class="apply-button" style="display:none;">apply</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/7.1.0/rxjs.umd.min.js"></script>
+    <script src="paint.js"></script>
+    <script>
+        var canvas = document.getElementById('canvas')
+        ctx = canvas.getContext('2d');
+        canvas.width = 128;
+        canvas.crossOrigin = "Anonymous";
+        canvas.height = 128;
+        strDataURI = './blob_base.png'
+        var img = new window.Image();
+        var maxtextsize = 60
+        var textsize = maxtextsize
+        var text = ""
+        img.addEventListener("load", function () {
+            drawDataURIOnCanvas(canvas)
+        });
+        img.setAttribute("src", strDataURI);
+
+        function drawDataURIOnCanvas(canvas) {
+            canvas.getContext("2d").drawImage(img, 0, 0);
+			copy();
+        }
+
+        async function draw(fn) {
+            ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.font = textsize + "pt Verdana";
+            ctx.rotate(0.195);
+            ctx.fillStyle = 'rgba(256,256,256,1)';
+            ctx.fillRect(0, 28, 130, 80)
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            await fn(ctx);
+            ctx.restore();
+        }
+
+        async function drawTextOnCanvas(text, canvas) {
+            await draw((ctx) => {
+                var textHeight = 0
+                var heights = [0]
+                var ascents = []
+                text.split("\n").forEach((text) => {
+                    textHeight += (ctx.measureText(text).actualBoundingBoxAscent * 1.1 + ctx.measureText(text).actualBoundingBoxDescent)
+                    heights.push(textHeight)
+                    ascents.push(ctx.measureText(text).actualBoundingBoxAscent * 1.1)
+                });
+                const topMargin = (65 - (textHeight) / 2);
+                text.split("\n").forEach((text, currentLine) => { ctx.fillText(text, 60, topMargin + heights[currentLine] + ascents[currentLine]); ++currentLine; });
+            });
+        }
+
+        async function drawImage(imgSrc, ctx) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.addEventListener('load', async () => {
+                    ctx.drawImage(img, 0, 28, 130, 80);
+                    resolve();
+                }, false)
+                img.src = imgSrc
+            });
+        }
+
+        async function drawImageUrlOnCanvas(url, canvas) {
+            await draw(async (ctx) => {
+                await drawImage(url, ctx);
+            });
+        }
+        async function drawImageFileOnCanvas(file, canvas) {
+            if (!file) return;
+            await draw(async (ctx) => {
+                return new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.addEventListener('load', async () => {
+                        await drawImage(reader.result, ctx);
+                        resolve();
+                    }, false);
+                    reader.readAsDataURL(file);
+                });
+            });
+        }
+
+        async function textsizeupdate(e) {
+            textsize = parseInt(e.value)
+            await drawTextOnCanvas(text, canvas)
+            drawDataURIOnCanvas(canvas)
+        }
+        async function textupdate(e) {
+            text = e.value
+            textInput = document.getElementById('textsize')
+            ctx = canvas.getContext('2d')
+            ctx.font = "8pt Verdana";
+            width = Math.max( ... text.split("\n").map( textline => ctx.measureText(textline).width ) )
+            textsize = Math.min(Math.ceil(600 / width * 1.45), maxtextsize)
+            textInput.value = textsize
+
+            await drawTextOnCanvas(text, canvas)
+            drawDataURIOnCanvas(canvas)
+        }
+
+        async function imageupdate(e) {
+            let file = e.files[0];
+            await drawImageFileOnCanvas(file, canvas);
+            drawDataURIOnCanvas(canvas);
+        }
+
+        async function imageurlupdate(e) {
+            await drawImageUrlOnCanvas(e.value, canvas);
+            drawDataURIOnCanvas(canvas);
+        }
+        drawTextOnCanvas("", canvas)
+        async function main() {
+            const paint = initPaint();
+
+            document.querySelector('.apply-button').addEventListener('click', async () => {
+                const img = paint.getImageData();
+                await draw(async (ctx) => {
+                    const dataURL = document.querySelector('#drawing-area').toDataURL();
+                    await drawImage(dataURL, ctx);
+                })
+                drawDataURIOnCanvas(canvas);
+            }, false);
+
+        }
+        main();
+    </script>
+
+    <script>
+        function copy() {
+            canvas.toBlob(function(blob) {
+              var newImg = document.getElementById("copy");
+                  url = URL.createObjectURL(blob);
+
+              newImg.onload = function() {
+                URL.revokeObjectURL(url);
+              };
+
+              newImg.src = url;
+            });
+            document.getElementById("canvas").style.display = "none";
+        }
+        // =============
+        // == Globals ==
+        // =============
+        const canvas2 = document.getElementById('drawing-area');
+        const canvasContext = canvas2.getContext('2d');
+        const clearButton = document.getElementById('clear-button');
+        const state = {
+          mousedown: false
+        };
+
+        // ===================
+        // == Configuration ==
+        // ===================
+        const lineWidth = 5;
+        const halfLineWidth = lineWidth / 2;
+        const shadowBlur = lineWidth / 4;
+        let fillStyle = '#000';
+        let strokeStyle = '#000';
+        let shadowColor = '#fff';
+
+        // =====================
+        // == Event Listeners ==
+        // =====================
+        canvas2.addEventListener('mousedown', handleWritingStart);
+        canvas2.addEventListener('mousemove', handleWritingInProgress);
+        canvas2.addEventListener('mouseup', handleDrawingEnd);
+        canvas2.addEventListener('mouseout', handleDrawingEnd);
+
+        canvas2.addEventListener('touchstart', handleWritingStart);
+        canvas2.addEventListener('touchmove', handleWritingInProgress);
+        canvas2.addEventListener('touchend', handleDrawingEnd);
+
+        clearButton.addEventListener('click', handleClearButtonClick);
+
+        // ====================
+        // == Event Handlers ==
+        // ====================
+        function handleWritingStart(event) {
+          event.preventDefault();
+
+          const mousePos = getMosuePositionOnCanvas(event);
+          
+          canvasContext.beginPath();
+
+          canvasContext.moveTo(mousePos.x, mousePos.y);
+
+          canvasContext.lineWidth = document.getElementById('lineWidth').value;
+          canvasContext.strokeStyle = document.getElementById('html5colorpicker').value;
+          canvasContext.shadowColor = null;
+          canvasContext.shadowBlur = null;
+
+          canvasContext.fill();
+          
+          state.mousedown = true;
+        }
+
+        function handleWritingInProgress(event) {
+          event.preventDefault();
+          
+          if (state.mousedown) {
+            const mousePos = getMosuePositionOnCanvas(event);
+
+            canvasContext.lineTo(mousePos.x, mousePos.y);
+            canvasContext.stroke();
+          }
+        }
+
+        function handleDrawingEnd(event) {
+        document.getElementById("apply-button").click()
+          event.preventDefault();
+          
+          if (state.mousedown) {
+            canvasContext.shadowColor = null;
+            canvasContext.shadowBlur = null;
+
+            canvasContext.stroke();
+          }
+          
+          state.mousedown = false;
+        }
+
+        function handleClearButtonClick(event) {
+
+          var newImg = document.getElementById("copy");
+          newImg.src = "./blob_base.png";
+
+          event.preventDefault();
+          
+          clearCanvas();
+        }
+
+        // ======================
+        // == Helper Functions ==
+        // ======================
+        function getMosuePositionOnCanvas(event) {
+          const clientX = event.pageX || event.touches[0].pageX;
+          const clientY = event.pageY || event.touches[0].pageY;
+          const { offsetLeft, offsetTop } = event.target;
+          const canvasX = clientX - offsetLeft;
+          const canvasY = clientY - offsetTop;
+
+          return { x: canvasX, y: canvasY };
+        }
+
+        function clearCanvas() {
+          canvasContext.clearRect(0, 0, canvas2.width, canvas2.height);
+        }
+    </script>
 </html>
